@@ -1,0 +1,188 @@
+# Makefile to build libultra
+
+include util.mk
+
+N64_SDK       ?= /opt/crashsdk
+N64_BINDIR    ?= $(N64_SDK)/bin
+
+# Preprocessor definitions
+
+DEFINES =
+
+SRC_DIRS :=
+
+# Whether to hide commands or not
+VERBOSE ?= 0
+ifeq ($(VERBOSE),0)
+  V := @
+endif
+
+# Whether to colorize build messages
+COLOR ?= 1
+
+# VERSION 	   - selects the version of the library to build
+#   libultra	 - standard library
+#   libultra_d   - debug library
+#   libultra_rom - final ROM library
+VERSION ?= libultra_rom
+$(eval $(call validate-option,VERSION,libultra libultra_d libultra_rom))
+
+ifeq      ($(VERSION),libultra)
+	DEFINES += NDEBUG=1
+else ifeq ($(VERSION),libultra_d)
+	DEFINES += _DEBUG=1
+else ifeq ($(VERSION),libultra_rom)
+	DEFINES += NDEBUG=1
+	DEFINES += _FINALROM=1
+endif
+
+TARGET := $(VERSION)
+
+#ifeq ($(filter clean,$(MAKECMDGOALS)),)
+  #$(info ==== Build Options ====)
+  #$(info Version:        $(VERSION))
+  #$(info =======================)
+#endif
+
+#==============================================================================#
+# Target Executable and Sources                                                #
+#==============================================================================#
+BUILD_DIR_BASE := build
+# BUILD_DIR is the location where all build artifacts are placed
+BUILD_DIR      := $(BUILD_DIR_BASE)/$(VERSION)
+LIB            := $(BUILD_DIR)/$(TARGET).a
+
+# Directories containing source files
+SRC_DIRS += $(shell find src -type d)
+
+C_FILES           := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
+S_FILES           := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.s))
+
+# Object files
+O_FILES := $(foreach file,$(C_FILES),$(BUILD_DIR)/$(file:.c=.o)) \
+           $(foreach file,$(S_FILES),$(BUILD_DIR)/$(file:.s=.o))
+
+# Automatic dependency files
+DEP_FILES := $(O_FILES:.o=.d)
+
+#==============================================================================#
+# Compiler Options                                                             #
+#==============================================================================#
+
+AS        := $(N64_BINDIR)/mips-n64-as
+CC        := $(N64_BINDIR)/mips-n64-gcc
+CPP       := cpp
+LD        := $(N64_BINDIR)/mips-n64-ld
+AR        := $(N64_BINDIR)/mips-n64-gcc-ar
+
+# Do NOT depend on system-installed headers! If you need to make a header change,
+# test it in your source first!
+INCLUDE_DIRS += include include/PR include/internal $(BUILD_DIR) $(BUILD_DIR)/include src .
+
+GBIDEFINE := -DF3DEX_GBI_2
+
+C_DEFINES = $(foreach d,$(DEFINES),-D$(d)) $(GBIDEFINE)
+DEF_INC_CFLAGS = $(foreach i,$(INCLUDE_DIRS),-I$(i)) $(C_DEFINES)
+
+CFLAGS = -g -ggdb -G 0 -mabi=eabi -mgp32 -mno-abicalls -D_MIPS_SIM=2 \
+        -ffreestanding -mfix4300 -march=vr4300 -mtune=vr4300 \
+        -mno-check-zero-division -fno-stack-protector \
+        $(DEF_INC_CFLAGS) -w -fwrapv $(EXT_CFLAGS)
+ASFLAGS := -march=vr4300 -mtune=vr4300 -mno-check-zero-division \
+           -mabi=eabi -mgp32 -mno-abicalls -D_MIPS_SIM=2 \
+           $(foreach i,$(INCLUDE_DIRS),-I$(i)) $(foreach d,$(DEFINES),--defsym $(d))
+
+# C preprocessor flags
+CPPFLAGS := -P -Wno-trigraphs $(DEF_INC_CFLAGS)
+
+# tools
+PRINT = printf
+
+ifeq ($(COLOR),1)
+NO_COL  := \033[0m
+RED     := \033[0;31m
+GREEN   := \033[0;32m
+BLUE    := \033[0;34m
+YELLOW  := \033[0;33m
+BLINK   := \033[33;5m
+endif
+
+# Common build print status function
+define print
+  @$(PRINT) "$(GREEN)$(1) $(YELLOW)$(2)$(GREEN) -> $(BLUE)$(3)$(NO_COL)\n"
+endef
+
+#==============================================================================#
+# Main Targets                                                                 #
+#==============================================================================#
+
+# Default target
+default: $(LIB)
+
+clean:
+	$(RM) -r $(BUILD_DIR_BASE)
+
+ALL_DIRS := $(BUILD_DIR) $(addprefix $(BUILD_DIR)/,$(SRC_DIRS))
+
+# Make sure build directory exists before compiling anything
+DUMMY != mkdir -p $(ALL_DIRS)
+
+$(BUILD_DIR)/src/nintendo/voice/%.o: DEFINES += LANG_JAPANESE=1
+$(BUILD_DIR)/src/monegi/gu/parse_gbi.o: GBIDEFINE = 
+$(BUILD_DIR)/src/monegi/gu/us2dex_emu.o: GBIDEFINE = -DF3DEX_GBI
+$(BUILD_DIR)/src/monegi/sprite/sprite.o: GBIDEFINE = 
+$(BUILD_DIR)/src/monegi/sprite/spriteex.o: GBIDEFINE = 
+$(BUILD_DIR)/src/monegi/sprite/spriteex2.o: GBIDEFINE = 
+
+#==============================================================================#
+# Compilation Recipes                                                          #
+#==============================================================================#
+
+# Compile C code
+$(BUILD_DIR)/src/nintendo/voice/%.o: src/nintendo/voice/%.c
+	$(call print,Compiling:,$<,$@)
+	$(V)tools/compile_sjis.py -D__CC=$(CC) -D__BUILD_DIR=$(BUILD_DIR) -c $(CFLAGS) -D_LANGUAGE_C -MMD -MF $(BUILD_DIR)/src/nintendo/voice/$*.d  -o $@ $<
+
+$(BUILD_DIR)/%.o: %.c
+	$(call print,Compiling:,$<,$@)
+	$(V)$(CC) -c $(CFLAGS) -D_LANGUAGE_C -MMD -MF $(BUILD_DIR)/$*.d  -o $@ $<
+$(BUILD_DIR)/%.o: $(BUILD_DIR)/%.c
+	$(call print,Compiling:,$<,$@)
+	$(V)$(CC) -c $(CFLAGS) -D_LANGUAGE_C -MMD -MF $(BUILD_DIR)/$*.d  -o $@ $<
+
+# Assemble assembly code
+$(BUILD_DIR)/%.o: %.s
+	$(call print,Assembling:,$<,$@)
+	$(V)$(CC) -c $(CFLAGS) $(foreach i,$(INCLUDE_DIRS),-Wa,-I$(i)) -x assembler-with-cpp -MMD -MF $(BUILD_DIR)/$*.d  -o $@ $<
+
+# Link final ELF file
+$(LIB): $(O_FILES)
+	@$(PRINT) "$(GREEN)Linking $(VERSION):  $(BLUE)$@ $(NO_COL)\n"
+	$(V)$(AR) rcs -o $@ $(O_FILES)
+
+all: $(BUILD_DIR_BASE)/libultra.a $(BUILD_DIR_BASE)/libultra_d.a $(BUILD_DIR_BASE)/libultra_rom.a
+
+$(BUILD_DIR_BASE)/libultra.a: 
+	$(V)$(MAKE) VERSION=libultra
+	$(V)cp $(BUILD_DIR_BASE)/libultra/libultra.a $(BUILD_DIR_BASE)
+
+$(BUILD_DIR_BASE)/libultra_d.a:
+	$(V)$(MAKE) VERSION=libultra_d
+	$(V)cp $(BUILD_DIR_BASE)/libultra_d/libultra_d.a $(BUILD_DIR_BASE)
+
+$(BUILD_DIR_BASE)/libultra_rom.a:
+	$(V)$(MAKE) VERSION=libultra_rom
+	$(V)cp $(BUILD_DIR_BASE)/libultra_rom/libultra_rom.a $(BUILD_DIR_BASE)
+
+include install.mk
+
+.PHONY: clean default all install pkginstall
+# with no prerequisites, .SECONDARY causes no intermediate target to be removed
+.SECONDARY:
+
+# Remove built-in rules, to improve performance
+MAKEFLAGS += --no-builtin-rules
+
+-include $(DEP_FILES)
+
+print-% : ; $(info $* is a $(flavor $*) variable set to [$($*)]) @true

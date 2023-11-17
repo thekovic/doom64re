@@ -1,59 +1,101 @@
-# DOOM64-RE
+# DOOM 64 RE
 
-Welcome to the complete reverse engineering of Doom 64 by [GEC], this effort took about 1 year and a half although it had not advanced almost nothing, I restarted the whole process from June of this year, theoretically 5 months to complete it from scratch.
+The best way to play Doom 64 on your N64 console. Based on [Doom 64-RE]. Play
+it as a new experience on the original N64 game, or use it a base for enhanced
+mods.
 
-## Installation
+## Features
 
-You need to download and install the N64 SDK: https://mega.nz/#!AOYDkSxA!MuAqt8iRBk0GGbaqaXVYB9tfZxsquKg5QkbCRL3VOLM
-You can also go to this link if it is of your own interest https://n64.dev/
+- Jumping/Crouching
+- Freelook
+- Rumble pak support
+- Autoaim option
+- Fly mode cheat
+- Widescreen support
+- Additional linedef types from [Doom64EX-Plus]
+- More controller options
+  - Turok-style and Perfect Dark-style controls
+  - Dual analog support with two controllers
+  - N64 mouse support
+- High resolution video modes (expansion pak required)
+- Persistent saves to SRAM (no more controller pak requirement)
+- Quick saves (for saving/loading during a level)
+- Per-monster colored blood particles
+- Enhanced HUD with text colors, weapon cycle and damage direction indicators
+- Keys and key doors display on the automap
+- Lots of bugfixes and optimizations
+- Expanded difficulty settings
+  - "Hardcore!" from Complete Edition
+  - "Nightmare!" from PC Doom
+  - "Ultra-Nightmare!" inspired by Doom 2016
+  - "Be Merciless!" from Merciless Edition
+  - Custom difficulty menu for further options
+- Autorun option
+- Map stats option
+- Options to toggle bilinear filtering, dithering, anti-aliasing
+- Additional cheats: keys, noclip, lock monsters, colors, fullbright, gamma correct, music test
 
-To compile it is required to use Windows XP, you can also use virtual machine for such purposes
 
-Once the N64SDK is installed, copy the "doom64" folder to the root "C:" of your hard drive.
+## Building
 
-For now it is compatible with the USA version of Doom 64.
-Of course, before compiling you need the data of the original Doom64 (DOOM64.WAD | DOOM64.WMD | DOOM64.WSD | DOOM64.WDD).
-To obtain them, go to the Tools folder and extract the content of the Doom64Extractor.zip file, "source code included".
-Edit the file ExtraerDatos.bat and you change the text "Doom 64 (Usa) .z64" by the name of the rom you have, it is very important that it is in "z64" format later you execute the file ExtraerDatos.bat and copy the extracted data in the folder "Data".
-If you can't get the rom in "z64" format there is a file in the Tools folder that is Tool64_v1.11.zip extract them and you can convert the "n64 and v64" formats to "z64".
-Finally you run the MAKE_ROM.bat file to compile and obtain a file called doom64.n64
+A Debian-based Linux distribution is required to build. WSL on Windows will also work.
 
-## iQue Installation
+First, CrashOveride's [Modern N64 SDK] must be installed. Then, install these
+packages with apt-get:
 
-You need to download and install the iQue SDK: https://ultra64.ca/resources/software/
+```sh
+sudo apt-get install binutils-mips-n64 gcc-mips-n64 newlib-mips-n64 n64sdk-common n64sdk makemask
+```
 
-To compile it is required to use Red Hat Linux 9, you can also use virtual machine for such purposes
+The data files from the original game must be placed in the `data` folder in
+order to build. The required files are: DOOM64.WAD, DOOM64.WMD, DOOM64.WSD,
+DOOM64.WDD.
 
-Once the iQue SDK is installed, copy the "doom64" folder to your home folder.
+Once the SDK packages are installed and the data is in place, the rom can be
+built by invoking "make":
 
-For now it is compatible with the USA version of Doom 64.
+```sh
+make -j
+```
 
-Of course, before compiling you need the data of the original Doom64 (DOOM64.WAD | DOOM64.WMD | DOOM64.WSD | DOOM64.WDD).
-To obtain them, go to the Tools folder and compile the Doom64 Extractor (instructions in dm64ex.cpp)
-Then extract your rom ``./dm64ex -i baserom.us.z64`` 
-The romname is an example, however it must be in .z64.
+Additional options can be provided to configure or debug the ROM:
 
-Then copy the extracted data to "Data" folder, then cd to the main doom64 folder and run make:
+```sh
+make -j REGION=JP                    # Build against Japan ROM data
 
-``make PLATFORM=BB``
+make -j REGION=EU                    # Build against Europe ROM data
 
-Your ROM will be in doom64.n64, and can be ran on your iQue.
+make -j DEBUG=1                      # Turn off optimizations and enable extra debugging features
 
-## Notes
-The project was created with CodeBlocks, although it does not serve to compile, but to have the code in order and verification.
+make -j DEBUGOPT=1                   # Enable extra debugging features but leave optimizations on
 
-You can also use the WESSLIB.o from the original Mortal Kombat Trilogy n64 and not use the code rebuilt by me.
-For this go to the file "wessarc.h" and remove the slashes from the text "//#define NOUSEWESSCODE" it should look like this "#define NOUSEWESSCODE".
-Then go to the Makefile and remove the "#" from the following line (WESSLIB = #wesslib.o) it should look like this (WESSLIB = wesslib.o) and I added the "#" in the following line (ASMFILES = wessint_s.s) it should look like this (ASMFILES = #wessint_s.s) and you proceed to compile the Rom.
+make -j SOUND=0                      # Disable sound
 
-Special thanks to my brothers for the help to the community in DoomWorld and Kaiser since he is the only one to see the progress of my work and helps me in several occasions.
-GEC Team Discord:  https://discord.gg/aEZD4Y7
+make -j INTRO=0                      # Skip the intro screens on boot and go straight to the menu
 
-## News
-* Features: SECURITY KEYS "locked from the original game, give all the keys available in the level"
-* Features: WALL BLOCKING "locked from the original game, I consider it as Noclip"
-* Features: LOCK MONSTERS "locked from the original game, stops the movement of enemies like Doom 64 Ex"
-* Features: MUSIC TEST "locked from the original game, you can play the music available from the game"
-* Features: Colors "new feature for me, turn colors on and off making the game experience more interesting"
-* Features: FULL BRIGHT "new feature for me, all colors will be completely clear"
-* Features: FILTER "new feature for me, activates and deactivates the 3-point filter of the game"
+make -j WARP=XX                      # Warp to map number XX on boot
+
+make -j WARP=XX SKILL=3              # Warp to map number XX on boot, with the specified difficulty (1-5)
+
+make -j CHEATS=CF_GODMODE+CF_NOCLIP  # Spawn with cheats enabled (see doomdef.h for more CF_ flags)
+
+make -j USB=1                        # Enable Flashcart USB Screenshot/Demo transfers
+                                     # Supports EverDrive, 64Drive, SC64
+                                     # When used with DEBUG=1, enables debug logging over USB
+
+make -j GDB=1                        # Enable GDB debugging over USB (implies DEBUG=1 and USB=1)
+
+make -j DEBUG_DISPLAY=2              # Show debug frame counter by default (see ST_DrawDebug for more values)
+
+make -j DEBUG_MEM=1                  # Enable extra heap/stack overflow checking (slow)
+
+make -j FORCE_NO_EXPANSION_PAK=1     # Limit RAM usage to 4MB (for testing)
+
+make -j REQUIRE_EXPANSION_PAK=0      # Disable expansion pak requirement screen
+
+make -j BENCHMARK_MAP_LOAD=1         # Measure all map loading times on boot
+```
+
+## Contact
+
+Join the Doom 64 Discord: https://discord.gg/Ktxz8nz
